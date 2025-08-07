@@ -34,11 +34,12 @@ public class CombatManager : MonoBehaviour
     private int selectedAddCardChoiceIndex = 0;
     private bool awaitingAddCardChoice = false;
     private List<Enemy> activeEnemies = new List<Enemy>();
-    private List<int> enemyDamageForThisTurn = new List<int>();
+    private List<EnemyAttack> enemyAttacksForThisTurn = new List<EnemyAttack>();
     private List<SliceData> playerActions = new List<SliceData>();
     private int playerCurrentHp;
     private int playerCurrentArmor;
     private int playerMaxHp = 30;
+    private const int PlayerMaxArmor = 999;
     private bool combatOver = false;
 
     void Start()
@@ -76,6 +77,10 @@ public class CombatManager : MonoBehaviour
         {
             Debug.LogError("Add Card Selection Panel is not assigned! Please assign it in the Inspector.");
         }
+        if (playerActionsPanel == null)
+        {
+            Debug.LogError("Player Actions Panel is not assigned! Please assign it in the Inspector.");
+        }
         if (addCardOptionText != null) postCombatOptionUIElements.Add(addCardOptionText);
         else Debug.LogError("Add Card Option Text is not assigned!");
         if (removeCardOptionText != null) postCombatOptionUIElements.Add(removeCardOptionText);
@@ -89,53 +94,55 @@ public class CombatManager : MonoBehaviour
 
     void Update()
     {
+        if (Keyboard.current == null) return;
+
         if (awaitingPostCombatChoice)
         {
-            if (Keyboard.current.leftArrowKey.wasPressedThisFrame || Input.GetKeyDown(KeyCode.LeftArrow))
+            if (Keyboard.current.leftArrowKey.wasPressedThisFrame)
             {
                 selectedPostCombatOptionIndex = (selectedPostCombatOptionIndex - 1 + postCombatOptionUIElements.Count) % postCombatOptionUIElements.Count;
                 UpdatePostCombatOptionHighlight();
             }
-            else if (Keyboard.current.rightArrowKey.wasPressedThisFrame || Input.GetKeyDown(KeyCode.RightArrow))
+            else if (Keyboard.current.rightArrowKey.wasPressedThisFrame)
             {
                 selectedPostCombatOptionIndex = (selectedPostCombatOptionIndex + 1) % postCombatOptionUIElements.Count;
                 UpdatePostCombatOptionHighlight();
             }
-            else if (Keyboard.current.spaceKey.wasPressedThisFrame || Input.GetKeyDown(KeyCode.Space))
+            else if (Keyboard.current.spaceKey.wasPressedThisFrame)
             {
                 ConfirmPostCombatChoice();
             }
         }
         else if (awaitingCardRemovalChoice)
         {
-            if (Keyboard.current.leftArrowKey.wasPressedThisFrame || Input.GetKeyDown(KeyCode.LeftArrow))
+            if (Keyboard.current.leftArrowKey.wasPressedThisFrame)
             {
                 selectedCardRemovalIndex = (selectedCardRemovalIndex - 1 + cardSelectionUIElements.Count) % cardSelectionUIElements.Count;
                 UpdateCardRemovalHighlight();
             }
-            else if (Keyboard.current.rightArrowKey.wasPressedThisFrame || Input.GetKeyDown(KeyCode.RightArrow))
+            else if (Keyboard.current.rightArrowKey.wasPressedThisFrame)
             {
                 selectedCardRemovalIndex = (selectedCardRemovalIndex + 1) % cardSelectionUIElements.Count;
                 UpdateCardRemovalHighlight();
             }
-            else if (Keyboard.current.spaceKey.wasPressedThisFrame || Input.GetKeyDown(KeyCode.Space))
+            else if (Keyboard.current.spaceKey.wasPressedThisFrame)
             {
                 ConfirmCardRemovalChoice();
             }
         }
         else if (awaitingAddCardChoice)
         {
-            if (Keyboard.current.leftArrowKey.wasPressedThisFrame || Input.GetKeyDown(KeyCode.LeftArrow))
+            if (Keyboard.current.leftArrowKey.wasPressedThisFrame)
             {
                 selectedAddCardChoiceIndex = (selectedAddCardChoiceIndex - 1 + addCardChoiceUIElements.Count) % addCardChoiceUIElements.Count;
                 UpdateAddCardHighlight();
             }
-            else if (Keyboard.current.rightArrowKey.wasPressedThisFrame || Input.GetKeyDown(KeyCode.RightArrow))
+            else if (Keyboard.current.rightArrowKey.wasPressedThisFrame)
             {
                 selectedAddCardChoiceIndex = (selectedAddCardChoiceIndex + 1) % addCardChoiceUIElements.Count;
                 UpdateAddCardHighlight();
             }
-            else if (Keyboard.current.spaceKey.wasPressedThisFrame || Input.GetKeyDown(KeyCode.Space))
+            else if (Keyboard.current.spaceKey.wasPressedThisFrame)
             {
                 ConfirmAddCardChoice();
             }
@@ -172,7 +179,7 @@ public class CombatManager : MonoBehaviour
         playerActions = new List<SliceData>(actions);
         activeEnemies = new List<Enemy>(enemies);
         playerCurrentHp = hp;
-        playerCurrentArmor = armor;
+        playerCurrentArmor = Mathf.Clamp(armor, 0, PlayerMaxArmor);
         combatOver = false;
         if (activeEnemies.Count == 0)
         {
@@ -212,6 +219,11 @@ public class CombatManager : MonoBehaviour
             Debug.LogError("Action Slice UI Prefab is not assigned!");
             return;
         }
+        if (playerActionsPanel == null)
+        {
+            Debug.LogError("Player Actions Panel is not assigned! Cannot build player action UI.");
+            return;
+        }
         if (actionSliceUIPrefab.GetComponent<TextMeshProUGUI>() == null)
         {
             Debug.LogError("Action Slice UI Prefab is missing a TextMeshProUGUI component!");
@@ -230,12 +242,12 @@ public class CombatManager : MonoBehaviour
 
     private void PrepareEnemyTurn()
     {
-        enemyDamageForThisTurn.Clear();
+        enemyAttacksForThisTurn.Clear();
         foreach (var enemy in activeEnemies)
         {
             if (enemy != null && enemy.currentHp > 0)
             {
-                enemyDamageForThisTurn.Add(enemy.attackDamage);
+                enemyAttacksForThisTurn.Add(new EnemyAttack { enemy = enemy, damage = enemy.attackDamage });
                 enemy.SetActionText($"Deals {enemy.attackDamage} damage!");
             }
         }
@@ -266,7 +278,7 @@ public class CombatManager : MonoBehaviour
                 yield break;
             }
 
-            if (Input.GetKeyDown(KeyCode.LeftArrow))
+            if (Keyboard.current != null && Keyboard.current.leftArrowKey.wasPressedThisFrame)
             {
                 if (activeEnemies.Count > 0)
                 {
@@ -276,7 +288,7 @@ public class CombatManager : MonoBehaviour
                     UpdateEnemyHighlight(true);
                 }
             }
-            else if (Input.GetKeyDown(KeyCode.RightArrow))
+            else if (Keyboard.current != null && Keyboard.current.rightArrowKey.wasPressedThisFrame)
             {
                 if (activeEnemies.Count > 0)
                 {
@@ -287,18 +299,18 @@ public class CombatManager : MonoBehaviour
                 }
             }
 
-            if (Input.GetKeyDown(KeyCode.DownArrow))
+            if (Keyboard.current != null && Keyboard.current.downArrowKey.wasPressedThisFrame)
             {
                 selectedActionIndex = (selectedActionIndex + 1) % playerActionUIElements.Count;
                 UpdateActionHighlight();
             }
-            else if (Input.GetKeyDown(KeyCode.UpArrow))
+            else if (Keyboard.current != null && Keyboard.current.upArrowKey.wasPressedThisFrame)
             {
                 selectedActionIndex = (selectedActionIndex - 1 + playerActionUIElements.Count) % playerActionUIElements.Count;
                 UpdateActionHighlight();
             }
 
-            if (Input.GetKeyDown(KeyCode.Space))
+            if (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame)
             {
                 if (!AnyLivingEnemies())
                 {
@@ -388,14 +400,14 @@ public class CombatManager : MonoBehaviour
     {
         if (combatOver) yield break;
         Debug.Log("Enemy's turn has started. Player's current armor is: " + playerCurrentArmor);
-        for (int i = 0; i < enemyDamageForThisTurn.Count; i++)
+        foreach (var attack in enemyAttacksForThisTurn)
         {
-            if (i < activeEnemies.Count && activeEnemies[i] != null && activeEnemies[i].currentHp > 0)
+            if (attack.enemy != null && attack.enemy.currentHp > 0)
             {
-                var enemy = activeEnemies[i];
-                int enemyDamage = enemyDamageForThisTurn[i];
+                var enemy = attack.enemy;
+                int enemyDamage = attack.damage;
                 int damageToArmor = Mathf.Min(enemyDamage, playerCurrentArmor);
-                playerCurrentArmor -= damageToArmor;
+                playerCurrentArmor = Mathf.Clamp(playerCurrentArmor - damageToArmor, 0, PlayerMaxArmor);
                 int damageToHp = enemyDamage - damageToArmor;
                 playerCurrentHp -= damageToHp;
                 if (playerCurrentHp < 0) playerCurrentHp = 0;
@@ -449,7 +461,7 @@ public class CombatManager : MonoBehaviour
                 rouletteWheel?.UpdatePlayerStats(playerCurrentHp, playerCurrentArmor);
                 break;
             case SliceEffectType.Armor:
-                playerCurrentArmor += action.power;
+                playerCurrentArmor = Mathf.Clamp(playerCurrentArmor + action.power, 0, PlayerMaxArmor);
                 Debug.Log($"Player gained {action.power} armor. New Armor: {playerCurrentArmor}");
                 rouletteWheel?.UpdatePlayerStats(playerCurrentHp, playerCurrentArmor);
                 break;
@@ -815,5 +827,11 @@ public class CombatManager : MonoBehaviour
                 return e;
         }
         return null;
+    }
+
+    private class EnemyAttack
+    {
+        public Enemy enemy;
+        public int damage;
     }
 }
