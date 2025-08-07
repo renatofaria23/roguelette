@@ -52,6 +52,8 @@ public class RouletteWheel : MonoBehaviour
 
     private List<Enemy> activeEnemies = new List<Enemy>();
 
+    private readonly List<SliceData> activePowers = new List<SliceData>();
+
     private int playerCurrentHp;
 
     private int playerMaxHp = 30;
@@ -358,14 +360,18 @@ public class RouletteWheel : MonoBehaviour
 
         {
 
-            for (int i = 0; i < s.weight; i++)
-
+            // Exclude active powers from the roulette (they are removed until end of combat)
+            if (s.effect == SliceEffectType.Power_OnRollStart ||
+                s.effect == SliceEffectType.Power_OnRollEnd ||
+                s.effect == SliceEffectType.Power_OnAttacked ||
+                s.effect == SliceEffectType.Power_OnDealDamage)
             {
-
-                weighted.Add(s);
-
+                continue;
             }
-
+            for (int i = 0; i < s.weight; i++)
+            {
+                weighted.Add(s);
+            }
         }
 
         if (weighted.Count == 0)
@@ -560,6 +566,16 @@ public class RouletteWheel : MonoBehaviour
 
         rollCount.Clear();
 
+        // Restore powers back into the roulette since combat ended
+        foreach (var p in activePowers)
+        {
+            if (p != null && !rouletteSlices.Contains(p))
+            {
+                rouletteSlices.Add(p);
+            }
+        }
+        activePowers.Clear();
+
         Debug.Log($"RouletteWheel: Destroying all {currentLivingEnemies.Count} remaining enemies after player defeat.");
 
         foreach (Enemy enemy in currentLivingEnemies)
@@ -614,6 +630,15 @@ public class RouletteWheel : MonoBehaviour
         collectedActions.Clear();
         rollCount.Clear();
         activeEnemies.Clear();
+        // Restore powers into the roulette for the next combats
+        foreach (var p in activePowers)
+        {
+            if (p != null && !rouletteSlices.Contains(p))
+            {
+                rouletteSlices.Add(p);
+            }
+        }
+        activePowers.Clear();
 
         UpdatePlayerStats(playerCurrentHp, playerArmor);
         UpdateRollsLeftUI();
@@ -686,7 +711,8 @@ public class RouletteWheel : MonoBehaviour
             Debug.LogError("Roulette Wheel Parent GameObject not assigned!");
 
         }
-
+        // Trigger start-of-roll powers
+        TriggerPower(SliceEffectType.Power_OnRollStart);
     }
 
     private IEnumerator WaitForFinalEvaluationAndStartCombat()
@@ -695,6 +721,8 @@ public class RouletteWheel : MonoBehaviour
 
         yield return new WaitUntil(() => !isSpinning);
 
+        // Trigger end-of-roll powers before entering combat
+        TriggerPower(SliceEffectType.Power_OnRollEnd);
         StartCombat();
 
     }
@@ -751,14 +779,17 @@ public class RouletteWheel : MonoBehaviour
 
         {
 
-            for (int i = 0; i < s.weight; i++)
-
+            if (s.effect == SliceEffectType.Power_OnRollStart ||
+                s.effect == SliceEffectType.Power_OnRollEnd ||
+                s.effect == SliceEffectType.Power_OnAttacked ||
+                s.effect == SliceEffectType.Power_OnDealDamage)
             {
-
-                totalWeightedSlices++;
-
+                continue;
             }
-
+            for (int i = 0; i < s.weight; i++)
+            {
+                totalWeightedSlices++;
+            }
         }
 
         if (totalWeightedSlices == 0)
@@ -789,30 +820,25 @@ public class RouletteWheel : MonoBehaviour
 
         {
 
-            for (int i = 0; i < s.weight; i++)
-
+            if (s.effect == SliceEffectType.Power_OnRollStart ||
+                s.effect == SliceEffectType.Power_OnRollEnd ||
+                s.effect == SliceEffectType.Power_OnAttacked ||
+                s.effect == SliceEffectType.Power_OnDealDamage)
             {
-
-                float sliceStartAngle = accumulatedAngle;
-
-                float sliceEndAngle = accumulatedAngle + sliceAngle;
-
-                if (angleOnWheelAtPointer >= sliceStartAngle && angleOnWheelAtPointer < sliceEndAngle)
-
-                {
-
-                    landedSliceData = s;
-
-                    break;
-
-                }
-
-                accumulatedAngle += sliceAngle;
-
+                continue;
             }
-
+            for (int i = 0; i < s.weight; i++)
+            {
+                float sliceStartAngle = accumulatedAngle;
+                float sliceEndAngle = accumulatedAngle + sliceAngle;
+                if (angleOnWheelAtPointer >= sliceStartAngle && angleOnWheelAtPointer < sliceEndAngle)
+                {
+                    landedSliceData = s;
+                    break;
+                }
+                accumulatedAngle += sliceAngle;
+            }
             if (landedSliceData != null) break;
-
         }
 
         if (landedSliceData != null)
@@ -838,9 +864,25 @@ public class RouletteWheel : MonoBehaviour
             }
 
             UpdateRollHistoryUI();
-
-            collectedActions.Add(landedSliceData);
-
+            // If landed slice is a Power, activate it and remove from roulette until end of combat
+            if (landedSliceData.effect == SliceEffectType.Power_OnRollStart ||
+                landedSliceData.effect == SliceEffectType.Power_OnRollEnd ||
+                landedSliceData.effect == SliceEffectType.Power_OnAttacked ||
+                landedSliceData.effect == SliceEffectType.Power_OnDealDamage)
+            {
+                if (!activePowers.Contains(landedSliceData))
+                {
+                    activePowers.Add(landedSliceData);
+                    // Remove from roulette slices for the duration of combat
+                    rouletteSlices.Remove(landedSliceData);
+                    BuildRoulette(rouletteSlices);
+                    Debug.Log($"Activated persistent power: {landedSliceData.sliceName}");
+                }
+            }
+            else
+            {
+                collectedActions.Add(landedSliceData);
+            }
         }
 
         else
@@ -851,6 +893,71 @@ public class RouletteWheel : MonoBehaviour
 
         }
 
+    }
+
+    private void TriggerPower(SliceEffectType triggerType)
+    {
+        foreach (var power in activePowers)
+        {
+            if (power == null) continue;
+            if (power.effect == triggerType)
+            {
+                ApplyPowerEffect(power);
+            }
+        }
+    }
+
+    private void ApplyPowerEffect(SliceData power)
+    {
+        switch (power.effect)
+        {
+            case SliceEffectType.Power_OnRollStart:
+                // Example: gain armor equal to power
+                playerArmor = Mathf.Clamp(playerArmor + power.power, 0, 999);
+                UpdatePlayerStats(playerCurrentHp, playerArmor);
+                Debug.Log($"Power_OnRollStart applied: +{power.power} armor. Armor now {playerArmor}");
+                break;
+            case SliceEffectType.Power_OnRollEnd:
+                // Example: heal for power at end of roll phase
+                playerCurrentHp = Mathf.Clamp(playerCurrentHp + power.power, 0, playerMaxHp);
+                UpdatePlayerStats(playerCurrentHp, playerArmor);
+                Debug.Log($"Power_OnRollEnd applied: +{power.power} HP. HP now {playerCurrentHp}");
+                break;
+            case SliceEffectType.Power_OnAttacked:
+                // Handled from CombatManager via public hook
+                break;
+            case SliceEffectType.Power_OnDealDamage:
+                // Handled from CombatManager via public hook
+                break;
+        }
+    }
+
+    public void OnPlayerWasAttacked(int incomingDamage, int damageToHp, int damageToArmor)
+    {
+        foreach (var power in activePowers)
+        {
+            if (power != null && power.effect == SliceEffectType.Power_OnAttacked)
+            {
+                // Example: gain armor when attacked
+                playerArmor = Mathf.Clamp(playerArmor + power.power, 0, 999);
+                UpdatePlayerStats(playerCurrentHp, playerArmor);
+                Debug.Log($"Power_OnAttacked: +{power.power} armor after being attacked. Armor now {playerArmor}");
+            }
+        }
+    }
+
+    public void OnPlayerDealtDamage(int damageDealt)
+    {
+        foreach (var power in activePowers)
+        {
+            if (power != null && power.effect == SliceEffectType.Power_OnDealDamage)
+            {
+                // Example: heal when dealing damage
+                playerCurrentHp = Mathf.Clamp(playerCurrentHp + power.power, 0, playerMaxHp);
+                UpdatePlayerStats(playerCurrentHp, playerArmor);
+                Debug.Log($"Power_OnDealDamage: +{power.power} HP after dealing damage. HP now {playerCurrentHp}");
+            }
+        }
     }
     public void AddSlice(SliceData sliceToAdd)
     {

@@ -413,6 +413,8 @@ public class CombatManager : MonoBehaviour
                 if (playerCurrentHp < 0) playerCurrentHp = 0;
                 Debug.Log($"Enemy dealt {enemyDamage} damage. Armor absorbed {damageToArmor}. Player took {damageToHp}. HP: {playerCurrentHp}, Armor: {playerCurrentArmor}");
                 rouletteWheel?.UpdatePlayerStats(playerCurrentHp, playerCurrentArmor);
+                // Trigger OnAttacked powers
+                rouletteWheel?.OnPlayerWasAttacked(enemyDamage, damageToHp, damageToArmor);
                 enemy.SetActionText("");
                 yield return new WaitForSeconds(1.0f);
             }
@@ -453,6 +455,8 @@ public class CombatManager : MonoBehaviour
                 int damage = action.power;
                 Debug.Log($"Applying {damage} damage to enemy {targetEnemy.name}.");
                 targetEnemy.TakeDamage(damage);
+                // Trigger OnDealDamage powers
+                rouletteWheel?.OnPlayerDealtDamage(damage);
                 break;
             case SliceEffectType.Heal:
                 playerCurrentHp += action.power;
