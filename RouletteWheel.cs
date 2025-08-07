@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 
 using System.Collections;
 
@@ -134,11 +134,11 @@ public class RouletteWheel : MonoBehaviour
 
         playerCurrentHp = playerMaxHp;
 
-        playerArmor = 0;
-
-        BuildRoulette(rouletteSlices);
-
-        UpdatePlayerStats(playerCurrentHp, playerArmor);
+                playerArmor = 0;
+ 
+         BuildRoulette(rouletteSlices);
+ 
+         UpdatePlayerStats(playerCurrentHp, Mathf.Clamp(playerArmor, 0, 999));
 
         UpdateRollsLeftUI();
 
@@ -176,16 +176,16 @@ public class RouletteWheel : MonoBehaviour
 
     }
 
-    public void UpdatePlayerStats(int hp, int armor)
-
+        public void UpdatePlayerStats(int hp, int armor)
+ 
     {
-
-        playerCurrentHp = hp;
-
-        playerArmor = armor;
-
+ 
+        playerCurrentHp = Mathf.Clamp(hp, 0, playerMaxHp);
+ 
+        playerArmor = Mathf.Clamp(armor, 0, 999);
+ 
         UpdatePlayerHpDisplay();
-
+ 
     }
 
     void Update()
@@ -548,11 +548,11 @@ public class RouletteWheel : MonoBehaviour
 
         Debug.Log("RouletteWheel: Ending combat (player defeated - full reset).");
 
-        playerCurrentHp = finalHp;
-
-        playerArmor = finalArmor;
-
-        rollsLeft = 3;
+                playerCurrentHp = Mathf.Clamp(finalHp, 0, playerMaxHp);
+ 
+        playerArmor = Mathf.Clamp(finalArmor, 0, 999);
+ 
+         rollsLeft = 3;
 
         reboundsLeft = 1;
 
@@ -607,7 +607,7 @@ public class RouletteWheel : MonoBehaviour
     public void CombatFullyConcluded(int finalHp)
     {
         Debug.Log("RouletteWheel: All enemies defeated. Combat fully concluded.");
-        playerCurrentHp = finalHp;
+        playerCurrentHp = Mathf.Clamp(finalHp, 0, playerMaxHp);
         playerArmor = 0;
         reboundsLeft = 1;
         rollsLeft = 3;
@@ -641,9 +641,9 @@ public class RouletteWheel : MonoBehaviour
 
         playerCurrentHp = finalHp;
 
-        playerArmor = finalArmor;
-
-        activeEnemies = new List<Enemy>(currentLivingEnemies);
+                playerArmor = Mathf.Clamp(finalArmor, 0, 999);
+ 
+         activeEnemies = new List<Enemy>(currentLivingEnemies);
 
         Debug.Log($"RouletteWheel: Received {activeEnemies.Count} living enemies for new roll phase (currently hidden).");
 
